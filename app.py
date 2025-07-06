@@ -15,8 +15,7 @@ st.set_page_config(page_title="Nykaa Analytics Dashboard", layout="wide")
 # ----------- Load Data ----------------
 @st.cache_data
 def load_data():
-    data = pd.read_csv("NYKA.csv")
-    return data
+    return pd.read_csv("data/NYKA.csv")
 
 data = load_data()
 
@@ -29,7 +28,13 @@ analyze churn, and simulate A/B testing outcomes.
 # ----------- Sidebar Navigation ---------------
 section = st.sidebar.radio(
     "Select Analysis Section:",
-    ("Data Overview", "Customer Segmentation", "CLTV Prediction", "Churn Prediction", "A/B Testing Simulation")
+    (
+        "Data Overview",
+        "Customer Segmentation",
+        "CLTV Prediction",
+        "Churn Prediction",
+        "A/B Testing Simulation"
+    )
 )
 
 # ================================================
@@ -47,12 +52,12 @@ if section == "Data Overview":
 
     st.subheader("Missing Values Heatmap")
     fig, ax = plt.subplots()
-    sns.heatmap(data.isnull(), cbar=False, cmap='viridis')
+    sns.heatmap(data.isnull(), cbar=False, cmap='viridis', ax=ax)
     st.pyplot(fig)
 
     st.subheader("Correlation Heatmap")
     fig, ax = plt.subplots()
-    sns.heatmap(data.corr(), annot=True, cmap="coolwarm")
+    sns.heatmap(data.corr(), annot=True, cmap="coolwarm", ax=ax)
     st.pyplot(fig)
 
 # ================================================
@@ -65,7 +70,7 @@ elif section == "Customer Segmentation":
     and KMeans clustering.
     """)
 
-    # Example columns - adjust to your CSV
+    # Adjust these column names if different in your CSV
     customer_col = 'CustomerID'
     date_col = 'InvoiceDate'
     amount_col = 'TotalAmount'
@@ -83,7 +88,6 @@ elif section == "Customer Segmentation":
     st.subheader("RFM Table")
     st.dataframe(rfm.head())
 
-    # KMeans Clustering
     k = st.slider("Select number of clusters:", 2, 8, 4)
     model = KMeans(n_clusters=k, random_state=42)
     rfm['Cluster'] = model.fit_predict(rfm)
@@ -92,7 +96,7 @@ elif section == "Customer Segmentation":
     st.bar_chart(rfm['Cluster'].value_counts())
 
     st.subheader("Pairplot of Clusters")
-    fig = sns.pairplot(rfm.reset_index(), hue='Cluster')
+    fig = sns.pairplot(rfm.reset_index(), hue='Cluster', palette='tab10')
     st.pyplot(fig)
 
 # ================================================
@@ -101,26 +105,30 @@ elif section == "Customer Segmentation":
 elif section == "CLTV Prediction":
     st.header("Customer Lifetime Value (CLTV) Prediction")
     st.markdown("""
-    Forecast future revenue using simplified BG/NBD and Gamma-Gamma models.
-    (Requires frequency, recency, T, monetary value data.)
+    Forecast future revenue using BG/NBD and Gamma-Gamma models.
+    (Using synthetic data for demonstration; replace with real preprocessed summary.)
     """)
 
-    st.warning("For demo purposes, this section uses synthetic summary features.")
-
-    # Generate demo RFM summary
+    # Generate synthetic RFM summary ensuring recency <= T
+    st.warning("This demo uses synthetic summary features. Swap in real preprocessed data if available.")
     np.random.seed(42)
+    N = 200
+    T_vals = np.random.randint(90, 200, N)
+    recency_vals = np.array([np.random.randint(1, tv + 1) for tv in T_vals])
+
     summary = pd.DataFrame({
-        'frequency': np.random.randint(1, 10, 200),
-        'recency': np.random.randint(1, 100, 200),
-        'T': np.random.randint(90, 200, 200),
-        'monetary_value': np.random.uniform(10, 1000, 200)
+        'frequency': np.random.randint(1, 10, N),
+        'recency': recency_vals,
+        'T': T_vals,
+        'monetary_value': np.random.uniform(10, 1000, N)
     })
 
     # Fit BG/NBD
-    bgf = BetaGeoFitter()
+    bgf = BetaGeoFitter(penalizer_coef=0.01)
     bgf.fit(summary['frequency'], summary['recency'], summary['T'])
 
-    ggf = GammaGammaFitter()
+    # Fit Gamma-Gamma
+    ggf = GammaGammaFitter(penalizer_coef=0.01)
     ggf.fit(summary['frequency'], summary['monetary_value'])
 
     summary['CLTV'] = ggf.customer_lifetime_value(
@@ -129,8 +137,8 @@ elif section == "CLTV Prediction":
         summary['recency'],
         summary['T'],
         summary['monetary_value'],
-        time=3,
-        freq='W',
+        time=3,          # forecast horizon in months
+        freq='W',        # frequency of data collection
         discount_rate=0.01
     )
 
@@ -150,12 +158,11 @@ elif section == "Churn Prediction":
     st.markdown("""
     Train a basic churn classifier to predict which customers are likely 
     to churn after their first purchase.
-    (Here we simulate the dataset for demo.)
+    (Synthetic features demo; replace with real churn-ready dataset.)
     """)
 
-    st.warning("Replace this simulation with real churn-ready features in practice!")
+    st.warning("This demo uses synthetic feature data. Swap in real features and labels for production.")
 
-    # Generate synthetic churn dataset
     np.random.seed(42)
     N = 500
     X = pd.DataFrame({
@@ -166,25 +173,25 @@ elif section == "Churn Prediction":
     })
     y = np.random.randint(0, 2, N)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    model = RandomForestClassifier(random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42
+    )
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     preds = model.predict_proba(X_test)[:, 1]
 
-    # Feature Importance
     st.subheader("Feature Importances")
     fig, ax = plt.subplots()
     ax.barh(X_train.columns, model.feature_importances_)
     st.pyplot(fig)
 
-    # ROC Curve
     fpr, tpr, _ = roc_curve(y_test, preds)
     roc_auc = auc(fpr, tpr)
 
     st.subheader("ROC Curve")
     fig, ax = plt.subplots()
     ax.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-    ax.plot([0,1],[0,1],'--')
+    ax.plot([0,1], [0,1], '--', color='gray')
     ax.legend()
     st.pyplot(fig)
 
