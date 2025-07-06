@@ -15,7 +15,7 @@ st.set_page_config(page_title="Nykaa Analytics Dashboard", layout="wide")
 # ----------- Load Data ----------------
 @st.cache_data
 def load_data():
-    data = pd.read_csv("data/NYKA.csv")
+    data = pd.read_csv("NYKA.csv")
     return data
 
 data = load_data()
